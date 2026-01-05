@@ -1,5 +1,6 @@
 name: Flutter Build
 on: [push]
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -17,7 +18,7 @@ jobs:
       - name: Build APK
         run: |
           flutter pub get
-          # Skip strict validation to bypass version warnings
+          # The --android-skip-build-dependency-validation flag is the key here
           flutter build apk --debug --android-skip-build-dependency-validation
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
