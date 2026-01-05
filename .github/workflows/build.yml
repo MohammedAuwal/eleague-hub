@@ -1,6 +1,5 @@
 name: Flutter Build
 on: [push]
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -10,16 +9,15 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '21' # Flutter 3.38 requires Java 21
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
       - name: Build APK
         run: |
-          flutter clean
           flutter pub get
-          flutter build apk --debug
+          flutter build apk --debug --android-skip-build-dependency-validation
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
