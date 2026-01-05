@@ -6,25 +6,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
-
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
-
       - name: Build APK
         run: |
-          # These steps fix the "Code 1" error on cloud runners
+          flutter clean
           flutter pub get
-          # We force a build even if some local files are missing
-          flutter build apk --debug --suppress-analytics
-          
+          flutter build apk --debug
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
