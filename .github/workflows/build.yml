@@ -1,36 +1,38 @@
-name: Frontend Android Build
+name: Flutter Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
+      - name: Debug - show where we are
+        run: |
+          echo "PWD=$(pwd)"
+          echo "Listing current dir:"
+          ls -la
+          echo "Listing frontend:"
+          ls -la frontend || true
+          echo "frontend/pubspec.yaml?"
+          ls -la frontend/pubspec.yaml || true
+          echo "frontend/android?"
+          ls -la frontend/android || true
+
       - name: Install dependencies
+        working-directory: frontend
         run: flutter pub get
 
-      - name: Build APK (release)
-        run: flutter build apk --release --android-skip-build-dependency-validation
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: eleague-app-release
-          path: frontend/build/app/outputs/flutter-apk/app-release.apk
+      - name: Build Android APK
+        working-directory: frontend
+        run: flutter build apk --release
