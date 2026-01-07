@@ -1,4 +1,4 @@
-name: Rebuild Frontend as Flutter App
+name: Rebuild Frontend (Flutter App)
 
 on:
   workflow_dispatch:
@@ -9,59 +9,46 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Backup current frontend
+      - name: Backup old frontend
         run: |
-          rm -rf frontend_backup || true
-          cp -R frontend frontend_backup
+          rm -rf frontend_old || true
+          mv frontend frontend_old
 
-      - name: Create fresh Flutter app
+      - name: Create clean Flutter app
+        run: flutter create frontend
+
+      - name: Restore your Dart code
         run: |
-          rm -rf __fresh_frontend || true
-          flutter create -t app --project-name eleague_hub __fresh_frontend
+          rm -rf frontend/lib
+          cp -R frontend_old/lib frontend/lib
 
-      - name: Copy your code into fresh app
-        run: |
-          rm -rf __fresh_frontend/lib
-          cp -R frontend_backup/lib __fresh_frontend/lib
-
-          if [ -d "frontend_backup/assets" ]; then
-            rm -rf __fresh_frontend/assets
-            cp -R frontend_backup/assets __fresh_frontend/assets
+          if [ -d "frontend_old/assets" ]; then
+            rm -rf frontend/assets
+            cp -R frontend_old/assets frontend/assets
           fi
 
-          cp frontend_backup/pubspec.yaml __fresh_frontend/pubspec.yaml
+          cp frontend_old/pubspec.yaml frontend/pubspec.yaml || true
+          cp frontend_old/pubspec.lock frontend/pubspec.lock || true
 
       - name: Ensure SDK constraint
         run: |
-          if ! grep -q "sdk:" __fresh_frontend/pubspec.yaml; then
-            echo 'environment:' >> __fresh_frontend/pubspec.yaml
-            echo '  sdk: ">=3.0.0 <4.0.0"' >> __fresh_frontend/pubspec.yaml
-          else
-             sed -i 's/sdk: .*/sdk: ">=3.0.0 <4.0.0"/' __fresh_frontend/pubspec.yaml
-          fi
+          sed -i '/^environment:/,/^[^ ]/d' frontend/pubspec.yaml
+          sed -i '1i environment:\n  sdk: ">=3.0.0 <4.0.0"\n' frontend/pubspec.yaml
 
-      - name: Replace frontend
-        run: |
-          rm -rf frontend
-          mv __fresh_frontend frontend
+      - name: Flutter pub get
+        working-directory: frontend
+        run: flutter pub get
 
-      - name: Sanity check
-        run: |
-          cd frontend
-          flutter pub get
-
-      - name: Commit and push
+      - name: Commit rebuilt app
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add frontend frontend_backup
-          git commit -m "chore: rebuild frontend as proper flutter app"
+          git add frontend frontend_old
+          git commit -m "rebuild frontend as real Flutter app"
           git push
