@@ -1,0 +1,54 @@
+name: Repair Flutter Android (regenerate platforms)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Backup old platform folders
+        run: |
+          set -e
+          if [ -d "frontend/android" ]; then mv frontend/android frontend/android_old; fi
+          if [ -d "frontend/ios" ]; then mv frontend/ios frontend/ios_old; fi
+
+      - name: Create a fresh Flutter app template in temp
+        run: |
+          set -e
+          rm -rf __tmp_flutter_app
+          flutter create -t app --project-name eleague_hub __tmp_flutter_app
+
+      - name: Copy clean platform folders into frontend
+        run: |
+          set -e
+          rm -rf frontend/android frontend/ios
+          cp -R __tmp_flutter_app/android frontend/android
+          cp -R __tmp_flutter_app/ios frontend/ios
+
+      - name: Ensure pubspec sdk constraint exists
+        run: |
+          set -e
+          if ! grep -q "^environment:" frontend/pubspec.yaml; then
+            printf '\nenvironment:\n  sdk: ">=3.0.0 <4.0.0"\n' >> frontend/pubspec.yaml
+          else
+            sed -i 's/sdk: .*/sdk: ">=3.0.0 <4.0.0"/' frontend/pubspec.yaml
+          fi
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add frontend/android frontend/ios frontend/pubspec.yaml frontend/android_old frontend/ios_old || true
+          git commit -m "chore: regenerate flutter android/ios platform folders"
+          git push
