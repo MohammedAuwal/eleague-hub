@@ -1,38 +1,45 @@
-name: Flutter Build
+name: Frontend Android Build
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
+    paths:
+      - "frontend/**"
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Debug - show where we are
-        run: |
-          echo "PWD=$(pwd)"
-          echo "Listing current dir:"
-          ls -la
-          echo "Listing frontend:"
-          ls -la frontend || true
-          echo "frontend/pubspec.yaml?"
-          ls -la frontend/pubspec.yaml || true
-          echo "frontend/android?"
-          ls -la frontend/android || true
-
-      - name: Install dependencies
-        working-directory: frontend
+      - name: Pub get
         run: flutter pub get
 
-      - name: Build Android APK
-        working-directory: frontend
+      # ✅ Fix “unsupported Gradle project” by regenerating proper android/ and ios/
+      - name: Regenerate Flutter app platforms
+        run: flutter create -t app .
+
+      - name: Build APK
         run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: frontend/build/app/outputs/flutter-apk/app-release.apk
