@@ -1,0 +1,124 @@
+name: Fix Frontend Platforms (Regenerate android/ios)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      # --- DEBUG: prove which folder we are building from ---
+      - name: Show frontend structure
+        run: |
+          echo "Repo root:"
+          pwd
+          ls -la
+          echo "Frontend folder:"
+          ls -la frontend || true
+          echo "Pubspec exists?"
+          ls -la frontend/pubspec.yaml || true
+
+      # --- Backup your important files ---
+      - name: Backup lib/assets/pubspec
+        run: |
+          set -e
+          rm -rf __backup_frontend || true
+          mkdir -p __backup_frontend
+          cp -R frontend/lib __backup_frontend/lib
+          if [ -d "frontend/assets" ]; then cp -R frontend/assets __backup_frontend/assets; fi
+          cp frontend/pubspec.yaml __backup_frontend/pubspec.yaml
+          if [ -f "frontend/pubspec.lock" ]; then cp frontend/pubspec.lock __backup_frontend/pubspec.lock; fi
+
+      # --- Remove broken platforms ---
+      - name: Remove old android/ios (broken)
+        run: |
+          rm -rf frontend/android frontend/ios
+
+      # --- Regenerate platforms correctly INSIDE frontend ---
+      - name: Recreate Flutter app template in frontend
+        run: |
+          set -e
+          cd frontend
+          flutter create -t app .
+
+      # --- Restore your original code and pubspec ---
+      - name: Restore your code and dependencies
+        run: |
+          set -e
+          rm -rf frontend/lib
+          cp -R __backup_frontend/lib frontend/lib
+
+          if [ -d "__backup_frontend/assets" ]; then
+            rm -rf frontend/assets || true
+            cp -R __backup_frontend/assets frontend/assets
+          fi
+
+          cp __backup_frontend/pubspec.yaml frontend/pubspec.yaml
+          if [ -f "__backup_frontend/pubspec.lock" ]; then
+            cp __backup_frontend/pubspec.lock frontend/pubspec.lock
+          fi
+
+      # --- Ensure pubspec has correct SDK section (prevents earlier error) ---
+      - name: Ensure Dart SDK constraint + flutter_test are correct
+        run: |
+          set -e
+          python - << 'PY'
+import re, pathlib
+p = pathlib.Path("frontend/pubspec.yaml")
+t = p.read_text(encoding="utf-8")
+
+if "environment:" in t:
+    lines = t.splitlines()
+    out=[]
+    in_env=False
+    has_sdk=False
+    for line in lines:
+        if re.match(r"^environment:\s*$", line):
+            in_env=True
+            has_sdk=False
+            out.append(line)
+            continue
+        if in_env:
+            if re.match(r"^\S", line):
+                if not has_sdk:
+                    out.append('  sdk: ">=3.0.0 <4.0.0"')
+                in_env=False
+            if in_env and re.match(r'^\s+sdk\s*:\s*', line):
+                out.append('  sdk: ">=3.0.0 <4.0.0"')
+                has_sdk=True
+                continue
+        out.append(line)
+    if in_env and not has_sdk:
+        out.append('  sdk: ">=3.0.0 <4.0.0"')
+    t="\n".join(out)
+else:
+    t = 'environment:\n  sdk: ">=3.0.0 <4.0.0"\n\n' + t
+
+t = re.sub(r"(flutter_test:\s*\n\s*sdk:\s*).*", r"\1flutter", t)
+p.write_text(t, encoding="utf-8")
+print("pubspec.yaml repaired.")
+PY
+
+      - name: Pub get (frontend)
+        working-directory: frontend
+        run: flutter pub get
+
+      - name: Commit and push changes
+        run: |
+          set -e
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add frontend/pubspec.yaml frontend/android frontend/ios frontend/lib frontend/assets || true
+          git commit -m "chore: regenerate flutter android/ios in frontend (fix unsupported gradle)" || exit 0
+          git push
