@@ -1,0 +1,67 @@
+name: Rebuild Frontend as Flutter App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Backup current frontend
+        run: |
+          rm -rf frontend_backup || true
+          cp -R frontend frontend_backup
+
+      - name: Create fresh Flutter app
+        run: |
+          rm -rf __fresh_frontend || true
+          flutter create -t app --project-name eleague_hub __fresh_frontend
+
+      - name: Copy your code into fresh app
+        run: |
+          rm -rf __fresh_frontend/lib
+          cp -R frontend_backup/lib __fresh_frontend/lib
+
+          if [ -d "frontend_backup/assets" ]; then
+            rm -rf __fresh_frontend/assets
+            cp -R frontend_backup/assets __fresh_frontend/assets
+          fi
+
+          cp frontend_backup/pubspec.yaml __fresh_frontend/pubspec.yaml
+
+      - name: Ensure SDK constraint
+        run: |
+          if ! grep -q "sdk:" __fresh_frontend/pubspec.yaml; then
+            echo 'environment:' >> __fresh_frontend/pubspec.yaml
+            echo '  sdk: ">=3.0.0 <4.0.0"' >> __fresh_frontend/pubspec.yaml
+          else
+             sed -i 's/sdk: .*/sdk: ">=3.0.0 <4.0.0"/' __fresh_frontend/pubspec.yaml
+          fi
+
+      - name: Replace frontend
+        run: |
+          rm -rf frontend
+          mv __fresh_frontend frontend
+
+      - name: Sanity check
+        run: |
+          cd frontend
+          flutter pub get
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add frontend frontend_backup
+          git commit -m "chore: rebuild frontend as proper flutter app"
+          git push
